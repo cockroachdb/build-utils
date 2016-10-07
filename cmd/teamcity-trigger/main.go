@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 
@@ -8,10 +9,15 @@ import (
 	"github.com/kisielk/gotool"
 )
 
+var buildTypeID = flag.String("build", "Cockroach_Nightlies_Stress", "the TeamCity build ID to start")
+var branchName = flag.String("branch", "", "the VCS branch to build")
+
 const teamcityAPIUserEnv = "TC_API_USER"
 const teamcityAPIPasswordEnv = "TC_API_PASSWORD"
 
 func main() {
+	flag.Parse()
+
 	username, ok := os.LookupEnv(teamcityAPIUserEnv)
 	if !ok {
 		log.Fatalf("teamcity API username environment variable %s is not set", teamcityAPIUserEnv)
@@ -24,7 +30,7 @@ func main() {
 
 	client := teamcity.New("teamcity.cockroachdb.com", username, password)
 	for _, importPath := range importPaths {
-		build, err := client.QueueBuild("Cockroach_Nightlies_Stress", "master", map[string]string{
+		build, err := client.QueueBuild(*buildTypeID, *branchName, map[string]string{
 			"env.PKG": importPath,
 		})
 		if err != nil {
