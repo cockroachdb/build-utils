@@ -5,18 +5,15 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 
 	"golang.org/x/oauth2"
 
 	"github.com/google/go-github/github"
 	"github.com/pkg/errors"
-
-	"github.com/cockroachdb/build-utils/parser"
+	"github.com/tebeka/go2xunit/lib"
 )
 
 const githubAPITokenEnv = "GITHUB_API_TOKEN"
-const importPathUnderTestEnv = "PKG"
 const teamcityVCSNumberEnv = "BUILD_VCS_NUMBER"
 
 func main() {
@@ -34,11 +31,9 @@ func main() {
 	}
 }
 
-func makeCodeLike(output []string) string {
+func makeCodeLike(output string) string {
 	const codeDelim = "```"
-	output = append(output, codeDelim)
-	output = append([]string{codeDelim}, output...)
-	return strings.Join(output, "\n")
+	return codeDelim + output + codeDelim
 }
 
 func runGH(
@@ -46,59 +41,41 @@ func runGH(
 	createIssue func(owner string, repo string, issue *github.IssueRequest) (*github.Issue, *github.Response, error),
 	createComment func(owner string, repo string, number int, comment *github.IssueComment) (*github.IssueComment, *github.Response, error),
 ) error {
-
-	importPath, ok := os.LookupEnv(importPathUnderTestEnv)
-	if !ok {
-		return errors.Errorf("import path environment variable %s is not set", importPathUnderTestEnv)
-	}
-
 	sha, ok := os.LookupEnv(teamcityVCSNumberEnv)
 	if !ok {
 		return errors.Errorf("VCS number environment variable %s is not set", teamcityVCSNumberEnv)
 	}
 
-	var issues []*github.Issue
-	return parser.ForEachTest(input, func(test parser.Test, final bool) error {
-		if final {
-			for _, issue := range issues {
-				body := fmt.Sprintf(`Run details:
-
-%s`, makeCodeLike(test.Output))
-				if _, _, err := createComment("cockroachdb", "cockroach", *issue.ID, &github.IssueComment{
-					Body: &body,
-				}); err != nil {
-					return errors.Wrapf(err, "failed to post run details on GitHub issue %s", github.Stringify(issue))
-				}
-			}
-
-			return nil
-		}
-
-		switch {
-		case test.Pass, test.Skip:
-			return nil
-		}
-		title := fmt.Sprintf("%s: %s failed under stress", importPath, test.Name)
-		body := fmt.Sprintf(`SHA: https://github.com/cockroachdb/cockroach/commits/%s
+	suites, err := lib.ParseGotest(input, "")
+	if err != nil {
+		return errors.Wrap(err, "failed to parse `go test` output")
+	}
+	for _, suite := range suites {
+		for _, test := range suite.Tests {
+			switch test.Status {
+			case lib.Failed:
+				title := fmt.Sprintf("%s: %s failed under stress", suite.Name, test.Name)
+				body := fmt.Sprintf(`SHA: https://github.com/cockroachdb/cockroach/commits/%s
 
 Stress build found a failed test:
 
-%s`, sha, makeCodeLike(test.Output))
+%s`, sha, makeCodeLike(test.Message))
 
-		issueRequest := &github.IssueRequest{
-			Title: &title,
-			Body:  &body,
-			Labels: &[]string{
-				"Robot",
-				"test-failure",
-			},
-		}
-		issue, _, err := createIssue("cockroachdb", "cockroach", issueRequest)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create GitHub issue %s", github.Stringify(issueRequest))
-		}
+				issueRequest := &github.IssueRequest{
+					Title: &title,
+					Body:  &body,
+					Labels: &[]string{
+						"Robot",
+						"test-failure",
+					},
+				}
+				if _, _, err := createIssue("cockroachdb", "cockroach", issueRequest); err != nil {
+					return errors.Wrapf(err, "failed to create GitHub issue %s", github.Stringify(issueRequest))
+				}
 
-		issues = append(issues, issue)
-		return nil
-	})
+			}
+		}
+	}
+
+	return nil
 }
