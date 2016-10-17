@@ -40,16 +40,6 @@ go test -v  -tags '' -i -c ./storage -o ./storage/stress.test
 I161007 00:27:32\.319758 1 rand\.go:76  Random seed: -8328855967269786437
 `)
 
-	if val, ok := os.LookupEnv(importPathUnderTestEnv); ok {
-		defer os.Setenv(importPathUnderTestEnv, val)
-	} else {
-		defer os.Unsetenv(importPathUnderTestEnv)
-	}
-
-	if err := os.Setenv(importPathUnderTestEnv, pkg); err != nil {
-		t.Fatal(err)
-	}
-
 	if val, ok := os.LookupEnv(teamcityVCSNumberEnv); ok {
 		defer os.Setenv(teamcityVCSNumberEnv, val)
 	} else {
