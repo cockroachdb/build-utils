@@ -31,11 +31,6 @@ func main() {
 	}
 }
 
-func makeCodeLike(output string) string {
-	const codeDelim = "```"
-	return codeDelim + output + codeDelim
-}
-
 func runGH(
 	input io.Reader,
 	createIssue func(owner string, repo string, issue *github.IssueRequest) (*github.Issue, *github.Response, error),
@@ -59,7 +54,7 @@ func runGH(
 
 Stress build found a failed test:
 
-%s`, sha, makeCodeLike(test.Message))
+%s`, sha, "```\n"+test.Message+"\n```")
 
 				issueRequest := &github.IssueRequest{
 					Title: &title,

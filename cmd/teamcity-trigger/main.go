@@ -29,12 +29,12 @@ func main() {
 	importPaths := gotool.ImportPaths([]string{"github.com/cockroachdb/cockroach/..."})
 
 	client := teamcity.New("teamcity.cockroachdb.com", username, password)
-	for _, goflagsVal := range []string{"-race", "-tags deadlock"} {
+	for _, params := range []map[string]string{
+		{"env.GOFLAGS": "-race"},
+		{"env.TAGS": "deadlock"},
+	} {
 		for _, importPath := range importPaths {
-			params := map[string]string{
-				"env.PKG":     importPath,
-				"env.GOFLAGS": goflagsVal,
-			}
+			params["env.PKG"] = importPath
 			build, err := client.QueueBuild(*buildTypeID, *branchName, params)
 			if err != nil {
 				log.Fatalf("failed to create teamcity build (*buildTypeID=%s *branchName=%s, params=%+v): %s", *buildTypeID, *branchName, params, err)
